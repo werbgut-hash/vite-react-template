@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar System Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000011;
+            overflow: hidden;
+            color: white;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .panel {
+            position: absolute;
+            background: rgba(10, 20, 40, 0.85);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+        }
+
+        #info-panel {
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+        }
+
+        #info-panel h2 {
+            color: #64b5f6;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        #info-panel .planet-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+
+        #info-panel p {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        #info-panel .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(100, 150, 255, 0.2);
+        }
+
+        #controls-panel {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        #planet-selector {
+            top: 20px;
+            left: 20px;
+        }
+
+        #planet-selector h3 {
+            color: #64b5f6;
+            margin-bottom: 10px;
+        }
+
+        .planet-btn {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: rgba(100, 150, 255, 0.1);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .planet-btn:hover {
+            background: rgba(100, 150, 255, 0.3);
+        }
+
+        .planet-btn.active {
+            background: rgba(100, 150, 255, 0.5);
+            border-color: #64b5f6;
+        }
+
+        .planet-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        button.control-btn {
+            padding: 10px 20px;
+            background: rgba(100, 150, 255, 0.2);
+            border: 1px solid rgba(100, 150, 255, 0.4);
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        button.control-btn:hover {
+            background: rgba(100, 150, 255, 0.4);
+        }
+
+        button.control-btn.active {
+            background: rgba(100, 200, 100, 0.4);
+            border-color: #6f6;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-container label {
+            font-size: 14px;
+        }
+
+        input[type="range"] {
+            width: 150px;
+            accent-color: #64b5f6;
+        }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(10, 20, 40, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.5);
+            border-radius: 5px;
+            padding: 8px 12px;
+            font-size: 14px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+        }
+
+        #close-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="solar-canvas"></canvas>
+        <div id="ui-overlay">
+            <div id="planet-selector" class="panel">
+                <h3>🪐 Planeten auswählen</h3>
+                <div id="planet-buttons"></div>
+            </div>
+
+            <div id="info-panel" class="panel">
+                <button id="close-info">×</button>
+                <h2><span class="planet-color" id="info-color"></span><span id="info-name">Planet</span></h2>
+                <p id="info-description"></p>
+                <div class="data-row">
+                    <span>Durchmesser:</span>
+                    <span id="info-diameter"></span>
+                </div>
+                <div class="data-row">
+                    <span>Entfernung zur Sonne:</span>
+                    <span id="info-distance"></span>
+                </div>
+                <div class="data-row">
+                    <span>Umlaufzeit:</span>
+                    <span id="info-orbit"></span>
+                </div>
+                <div class="data-row">
+                    <span>Tageslänge:</span>
+                    <span id="info-day"></span>
+                </div>
+            </div>
+
+            <div id="controls-panel" class="panel">
+                <button class="control-btn" id="btn-play-pause">⏸ Pause</button>
+                <button class="control-btn" id="btn-reset">↺ Reset</button>
+                <div class="slider-container">
+                    <label>Geschwindigkeit:</label>
+                    <input type="range" id="speed-slider" min="0" max="5" step="0.1" value="1">
+                </div>
+                <button class="control-btn" id="btn-orbits">🔵 Orbits: AN</button>
+                <button class="control-btn" id="btn-labels">🏷 Labels: AN</button>
+                <button class="control-btn" id="btn-zoom-in">🔍 +</button>
+                <button class="control-btn" id="btn-zoom-out">🔍 −</button>
+            </div>
+        </div>
+        <div id="tooltip"></div>
+    </div>
+
+    <script>
+        // Planetendaten
+        const planets = [
+            {
+                name: "Sonne",
+                nameEn: "Sun",
+                color: "#FDB813",
+                radius: 40,
+                distance: 0,
+                orbitSpeed: 0,
+                rotationSpeed: 0.002,
+                diameter: "1.392.700 km",
+                realDistance: "0 Mio. km",
+                orbitPeriod: "-",
+                dayLength: "25 Tage",
+                description: "Die Sonne ist der Stern im Zentrum unseres Sonnensystems. Sie macht 99,86% der gesamten Masse des Sonnensystems aus."
+            },
+            {
+                name: "Merkur",
+                nameEn: "Mercury",
+                color: "#B5B5B5",
+                radius: 6,
+                distance: 70,
+                orbitSpeed: 0.02,
+                rotationSpeed: 0.005,
+                diameter: "4.880 km",
+                realDistance: "58 Mio. km",
+                orbitPeriod: "88 Tage",
+                dayLength: "59 Tage",
+                description: "Merkur ist der kleinste und sonnennächste Planet. Er hat keine Atmosphäre und extreme Temperaturschwankungen."
+            },
+            {
+                name: "Venus",
+                nameEn: "Venus",
+                color: "#E6C87A",
+                radius: 10,
+                distance: 100,
+                orbitSpeed: 0.015,
+                rotationSpeed: -0.002,
+                diameter: "12.104 km",
+                realDistance: "108 Mio. km",
+                orbitPeriod: "225 Tage",
+                dayLength: "243 Tage",
+                description: "Venus ist der heißeste Planet mit einer dichten CO₂-Atmosphäre. Sie rotiert rückwärts."
+            },
+            {
+                name: "Erde",
+                nameEn: "Earth",
+                color: "#6B93D6",
+                radius: 11,
+                distance: 140,
+                orbitSpeed: 0.01,
+                rotationSpeed: 0.02,
+                diameter: "12.742 km",
+                realDistance: "150 Mio. km",
+                orbitPeriod: "365 Tage",
+                dayLength: "24 Stunden",
+                description: "Unser Heimatplanet ist der einzige bekannte Planet mit Leben. 71% der Oberfläche sind mit Wasser bedeckt."
+            },
+            {
+                name: "Mars",
+                nameEn: "Mars",
+                color: "#C1440E",
+                radius: 8,
+                distance: 180,
+                orbitSpeed: 0.008,
+                rotationSpeed: 0.018,
+                diameter: "6.779 km",
+                realDistance: "228 Mio. km",
+                orbitPeriod: "687 Tage",
+                dayLength: "24h 37min",
+                description: "Der rote Planet hat die größte Vulkanformation im Sonnensystem. Er hat zwei kleine Monde."
+            },
+            {
+                name: "Jupiter",
+                nameEn: "Jupiter",
+                color: "#D8CA9D",
+                radius: 28,
+                distance: 260,
+                orbitSpeed: 0.004,
+                rotationSpeed: 0.04,
+                diameter: "139.820 km",
+                realDistance: "778 Mio. km",
+                orbitPeriod: "12 Jahre",
+                dayLength: "10 Stunden",
+                description: "Jupiter ist der größte Planet. Der Große Rote Fleck ist ein Sturm, der seit Jahrhunderten wütet."
+            },
+            {
+                name: "Saturn",
+                nameEn: "Saturn",
+                color: "#F4D59E",
+                radius: 24,
+                distance: 340,
+                orbitSpeed: 0.003,
+                rotationSpeed: 0.038,
+                diameter: "116.460 km",
+                realDistance: "1.4 Mrd. km",
+                orbitPeriod: "29 Jahre",
+                dayLength: "11 Stunden",
+                hasRings: true,
+                description: "Saturn ist für seine spektakulären Ringe bekannt, die aus Eis- und Gesteinsbrocken bestehen."
+            },
+            {
+                name: "Uranus",
+                nameEn: "Uranus",
+                color: "#D1E7E7",
+                radius: 16,
+                distance: 410,
+                orbitSpeed: 0.002,
+                rotationSpeed: 0.03,
+                diameter: "50.724 km",
+                realDistance: "2.9 Mrd. km",
+                orbitPeriod: "84 Jahre",
+                dayLength: "17 Stunden",
+                description: "Uranus rotiert auf der Seite. Er hat eine bläuliche Farbe durch Methan in der Atmosphäre."
+            },
+            {
+                name: "Neptun",
+                nameEn: "Neptune",
+                color: "#5B5DDF",
+                radius: 15,
+                distance: 470,
+                orbitSpeed: 0.0015,
+                rotationSpeed: 0.032,
+                diameter: "49.244 km",
+                realDistance: "4.5 Mrd. km",
+                orbitPeriod: "165 Jahre",
+                dayLength: "16 Stunden",
+                description: "Neptun ist der windigste Planet mit Geschwindigkeiten bis zu 2.100 km/h. Er ist sehr kalt und dunkel."
+            }
+        ];
+
+        // Canvas Setup
+        const canvas = document.getElementById('solar-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height, centerX, centerY;
+        
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            centerX = width / 2;
+            centerY = height / 2;
+        }
+        
+        resize();
+        window.addEventListener('resize', resize);
+
+        // State
+        let time = 0;
+        let speed = 1;
+        let isPaused = false;
+        let showOrbits = true;
+        let showLabels = true;
+        let selectedPlanet = null;
+        let zoom = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        // Mouse interaction
+        let isDragging = false;
+        let lastMouseX, lastMouseY;
+        let hoveredPlanet = null;
+
+        // Sterne generieren
+        const stars = [];
+        for (let i = 0; i < 500; i++) {
+            stars.push({
+                x: Math.random() * 2000 - 1000,
+                y: Math.random() * 2000 - 1000,
+                size: Math.random() * 1.5,
+                brightness: Math.random()
+            });
+        }
+
+        // Planetenpositionen berechnen
+        function getPlanetPosition(planet, t) {
+            if (planet.distance === 0) {
+                return { x: 0, y: 0 };
+            }
+            const angle = t * planet.orbitSpeed + planet.distance;
+            return {
+                x: Math.cos(angle) * planet.distance,
+                y: Math.sin(angle) * planet.distance * 0.3 // Elliptische Ansicht
+            };
+        }
+
+        // Zeichnen
+        function draw() {
+            // Hintergrund
+            ctx.fillStyle = '#000011';
+            ctx.fillRect(0, 0, width, height);
+
+            // Sterne
+            stars.forEach(star => {
+                const twinkle = 0.5 + 0.5 * Math.sin(time * 0.05 + star.brightness * 10);
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness * twinkle})`;
+                ctx.beginPath();
+                ctx.arc(
+                    centerX + star.x * zoom + offsetX,
+                    centerY + star.y * zoom + offsetY,
+                    star.size * zoom,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+            });
+
+            ctx.save();
+            ctx.translate(centerX + offsetX, centerY + offsetY);
+            ctx.scale(zoom, zoom);
+
+            // Orbit-Linien
+            if (showOrbits) {
+                planets.forEach(planet => {
+                    if (planet.distance > 0) {
+                        ctx.strokeStyle = 'rgba(100, 150, 255, 0.15)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, planet.distance, planet.distance * 0.3, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                });
+            }
+
+            // Planeten zeichnen
+            planets.forEach((planet, index) => {
+                const pos = getPlanetPosition(planet, time);
+                
+                // Schattenberechnung
+                const sunAngle = Math.atan2(-pos.y, -pos.x);
+                
+                // Saturn Ringe (hinter dem Planeten)
+                if (planet.hasRings) {
+                    ctx.save();
+                    ctx.translate(pos.x, pos.y);
+                    ctx.rotate(sunAngle + Math.PI / 2);
+                    ctx.scale(1, 0.3);
+                    ctx.strokeStyle = 'rgba(210, 180, 140, 0.6)';
+                    ctx.lineWidth = 8;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, planet.radius + 12, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Planet
+                const gradient = ctx.createRadialGradient(
+                    pos.x - planet.radius * 0.3,
+                    pos.y - planet.radius * 0.3,
+                    0,
+                    pos.x,
+                    pos.y,
+                    planet.radius
+                );
+                gradient.addColorStop(0, lightenColor(planet.color, 30));
+                gradient.addColorStop(1, planet.color);
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, planet.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Saturn Ringe (vor dem Planeten)
+                if (planet.hasRings) {
+                    ctx.save();
+                    ctx.translate(pos.x, pos.y);
+                    ctx.rotate(sunAngle + Math.PI / 2);
+                    ctx.scale(1, 0.3);
+                    ctx.strokeStyle = 'rgba(210, 180, 140, 0.8)';
+                    ctx.lineWidth = 6;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, planet.radius + 12, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Erde - Mond
+                if (planet.name === "Erde") {
+                    const moonAngle = time * 0.05;
+                    const moonX = pos.x + Math.cos(moonAngle) * 20;
+                    const moonY = pos.y + Math.sin(moonAngle) * 20 * 0.3;
+                    ctx.fillStyle = '#CCCCCC';
+                    ctx.beginPath();
+                    ctx.arc(moonX, moonY, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Label
+                if (showLabels || planet === hoveredPlanet || planet === selectedPlanet) {
+                    ctx.fillStyle = 'white';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(planet.name, pos.x, pos.y + planet.radius + 15);
+                }
+
+                // Auswahlmarkierung
+                if (planet === selectedPlanet) {
+                    ctx.strokeStyle = '#64b5f6';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, planet.radius + 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Hover-Effekt
+                if (planet === hoveredPlanet) {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, planet.radius + 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+
+            ctx.restore();
+
+            // Animation
+            if (!isPaused) {
+                time += speed;
+            }
+            
+            requestAnimationFrame(draw);
+        }
+
+        // Farbe aufhellen
+        function lightenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.min(255, (num >> 16) + amt);
+            const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+            const B = Math.min(255, (num & 0x0000FF) + amt);
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+        }
+
+        // Maus-Interaktion
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Hover-Erkennung
+            hoveredPlanet = null;
+            ctx.save();
+            ctx.translate(centerX + offsetX, centerY + offsetY);
+            ctx.scale(zoom, zoom);
+            
+            planets.forEach(planet => {
+                const pos = getPlanetPosition(planet, time);
+                const dx = (mouseX - centerX - offsetX) / zoom - pos.x;
+                const dy = (mouseY - centerY - offsetY) / zoom - pos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < planet.radius + 5) {
+                    hoveredPlanet = planet;
+                }
+            });
+            
+            ctx.restore();
+
+            // Tooltip
+            const tooltip = document.getElementById('tooltip');
+            if (hoveredPlanet) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.textContent = hoveredPlanet.name;
+                canvas.style.cursor = 'pointer';
+            } else {
+                tooltip.style.display = 'none';
+                canvas.style.cursor = isDragging ? 'grabbing' : 'grab';
+            }
+
+            // Pan
+            if (isDragging) {
+                offsetX += e.clientX - lastMouseX;
+                offsetY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            hoveredPlanet = null;
+            document.getElementById('tooltip').style.display = 'none';
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            zoom = Math.max(0.3, Math.min(3, zoom * delta));
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!isDragging && hoveredPlanet) {
+                selectPlanet(hoveredPlanet);
+            }
+        });
+
+        // Touch-Unterstützung
+        let lastTouchDist = 0;
+        
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                lastMouseX = e.touches[0].clientX;
+                lastMouseY = e.touches[0].clientY;
+            } else if (e.touches.length === 2) {
+                lastTouchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1 && isDragging) {
+                offsetX += e.touches[0].clientX - lastMouseX;
+                offsetY += e.touches[0].clientY - lastMouseY;
+                lastMouseX = e.touches[0].clientX;
+                lastMouseY = e.touches[0].clientY;
+            } else if (e.touches.length === 2) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const delta = dist / lastTouchDist;
+                zoom = Math.max(0.3, Math.min(3, zoom * delta));
+                lastTouchDist = dist;
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            isDragging = false;
+        });
+
+        // UI-Funktionen
+        function createPlanetButtons() {
+            const container = document.getElementById('planet-buttons');
+            container.innerHTML = '';
+            
+            planets.forEach(planet => {
+                const btn = document.createElement('button');
+                btn.className = 'planet-btn';
+                btn.innerHTML = `<span class="planet-dot" style="background: ${planet.color}"></span>${planet.name}`;
+                btn.onclick = () => selectPlanet(planet);
+                container.appendChild(btn);
+            });
+        }
+
+        function selectPlanet(planet) {
+            selectedPlanet = planet;
+            
+            // Update buttons
+            document.querySelectorAll('.planet-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.includes(planet.name)) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Info Panel anzeigen
+            const infoPanel = document.getElementById('info-panel');
+            infoPanel.style.display = 'block';
+            document.getElementById('info-name').textContent = planet.name;
+            document.getElementById('info-color').style.background = planet.color;
+            document.getElementById('info-description').textContent = planet.description;
+            document.getElementById('info-diameter').textContent = planet.diameter;
+            document.getElementById('info-distance').textContent = planet.realDistance;
+            document.getElementById('info-orbit').textContent = planet.orbitPeriod;
+            document.getElementById('info-day').textContent = planet.dayLength;
+
+            // Kamera auf Planeten zentrieren
+            const pos = getPlanetPosition(planet, time);
+            offsetX = -pos.x * zoom;
+            offsetY = -pos.y * zoom * 0.3;
+        }
+
+        // Control Buttons
+        document.getElementById('btn-play-pause').onclick = function() {
+            isPaused = !isPaused;
+            this.textContent = isPaused ? '▶ Start' : '⏸ Pause';
+            this.classList.toggle('active');
+        };
+
+        document.getElementById('btn-reset').onclick = () => {
+            time = 0;
+            zoom = 1;
+            offsetX = 0;
+            offsetY = 0;
+            selectedPlanet = null;
+            document.getElementById('info-panel').style.display = 'none';
+            document.querySelectorAll('.planet-btn').forEach(btn => btn.classList.remove('active'));
+        };
+
+        document.getElementById('speed-slider').oninput = function() {
+            speed = parseFloat(this.value);
+        };
+
+        document.getElementById('btn-orbits').onclick = function() {
+            showOrbits = !showOrbits;
+            this.textContent = showOrbits ? '🔵 Orbits: AN' : '⚫ Orbits: AUS';
+            this.classList.toggle('active');
+        };
+
+        document.getElementById('btn-labels').onclick = function() {
+            showLabels = !showLabels;
+            this.textContent = showLabels ? '🏷 Labels: AN' : '🏷 Labels: AUS';
+            this.classList.toggle('active');
+        };
+
+        document.getElementById('btn-zoom-in').onclick = () => {
+            zoom = Math.min(3, zoom * 1.3);
+        };
+
+        document.getElementById('btn-zoom-out').onclick = () => {
+            zoom = Math.max(0.3, zoom / 1.3);
+        };
+
+        document.getElementById('close-info').onclick = () => {
+            document.getElementById('info-panel').style.display = 'none';
+            selectedPlanet = null;
+            document.querySelectorAll('.planet-btn').forEach(btn => btn.classList.remove('active'));
+        };
+
+        // Initialisierung
+        createPlanetButtons();
+        draw();
+    </script>
+</body>
+</html>
